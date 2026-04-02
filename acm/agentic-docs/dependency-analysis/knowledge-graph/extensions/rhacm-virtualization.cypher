@@ -3,33 +3,40 @@
 // ============================================================================
 // Generated: 2026-01-30
 // Source: Deep investigation of kubevirt, kubev2v, stolostron repos and JIRA
-// Components: 48 new components across 4 major feature areas
-// Relationships: 60 new relationships (48 original + 12 orphan fixes)
+// Components: 46 components across 5 feature areas (48 original - 2 fabricated roles removed)
+// Relationships: 56 relationships (60 original - 5 removed + 1 corrected)
 // ============================================================================
 //
-// VERIFICATION STATUS: VERIFIED (Re-verified + Orphan Fixes)
-// Verified Date: 2026-02-02
-// Verified Cluster: slot-03.dev09.red-chesterfield.com (ACM Hub)
-// Re-verification: Fixed MCRA naming (ManagedCluster -> MultiCluster)
-// Orphan Fixes: Added 12 relationships for 9 previously orphaned nodes
-// CNV Version: 4.20.3, MTV Version: 2.10.3, ACM: 2.x with FG-RBAC enabled
+// VERIFICATION STATUS: VERIFIED (Accuracy Audit 2026-04-02)
+// Audit Date: 2026-04-02
+// Audit Cluster: ashafi-acm-216-ga.az.dev09.red-chesterfield.com (ACM 2.16 GA)
+// Audit Sources: Live cluster (CNV 4.21.1, MTV 2.11.2), ACM Console source
+//   code (stolostron/console release-2.16), kubevirt-plugin (release-4.20),
+//   Neo4j database queries
 //
-// Verification Method:
-// - Live cluster resource inspection (read-only)
-// - GitHub repository code analysis (kubevirt, kubev2v, stolostron orgs)
-// - CRD and operator structure validation
+// Audit Fixes Applied:
+// - Removed ACM_HUB_KUBEVIRT_ROLES and ACM_MANAGED_KUBEVIRT_ROLES (fabricated)
+// - Fixed CLUSTER_PERMISSION_CRD ON MATCH SET (base graph ID collision)
+// - Fixed ContainerDisks: CDI does not provide them; KubeVirt uses them
+// - Fixed Forklift Console Plugin: OCP plugin, not ACM Console
+// - Deprecated NODE_MAINTENANCE_OPERATOR (removed from HCO in CNV 4.18+)
+// - Fixed MTV_INTEGRATIONS type: Controller, not Operator
+// - Added featureGated metadata to optional components
+// - Removed incorrect MTV_INTEGRATIONS->Migration Planner relationship
 //
-// Key Verified Resources:
-// - HCO: kubevirt-hyperconverged-operator.v4.20.3
+// Previous Verification:
+// - 2026-02-02: slot-03.dev09 (CNV 4.20.3, MTV 2.10.3)
+// - Fixed MCRA naming, added 12 orphan-fix relationships
+//
+// Key Verified Resources (2026-04-02):
+// - HCO: kubevirt-hyperconverged-operator.v4.21.1
 // - CDI: cdi-kubevirt-hyperconverged (Deployed)
 // - SSP: ssp-kubevirt-hyperconverged (Deployed)
-// - MTV: mtv-operator.v2.10.3, forklift-controller (Running)
+// - MTV: mtv-operator.v2.11.2, forklift-controller (Running)
+// - CCLM: kubevirt-migration-operator/controller (Running)
 // - Addons: kubevirt-hyperconverged, mtv-operator ClusterManagementAddons
-// - RBAC: ClusterPermission CRD, kubevirt.io:admin/edit/view roles
-// - Providers: local-cluster-mtv, slot-04-mtv (CCLM targets)
-// - Console: kubevirt-plugin, forklift-console-plugin
-//
-// Total Graph After Update: 348 components, 483 relationships
+// - RBAC: ClusterPermission CRD, MCRA CRD, kubevirt.io:admin/edit/view/migrate
+// - Console: kubevirt-plugin, forklift-console-plugin (OCP-level)
 // ============================================================================
 
 // ============================================================================
@@ -101,7 +108,8 @@ ON CREATE SET
   vm_console_proxy.label = 'VM Console Proxy',
   vm_console_proxy.subsystem = 'Cluster',
   vm_console_proxy.type = 'Component',
-  vm_console_proxy.description = 'Provides VNC/serial console access to VMs';
+  vm_console_proxy.description = 'Provides VNC/serial console access to VMs',
+  vm_console_proxy.featureGated = true;
 
 // --- Cluster Network Addons Operator (CNAO) ---
 MERGE (cnao:RHACMComponent {id: 'CNAO_OPERATOR'})
@@ -116,7 +124,8 @@ ON CREATE SET
   macvtap_cni.label = 'MacVTap CNI',
   macvtap_cni.subsystem = 'Cluster',
   macvtap_cni.type = 'Component',
-  macvtap_cni.description = 'CNI plugin for MacVTap networking for VM workloads';
+  macvtap_cni.description = 'CNI plugin for MacVTap networking for VM workloads',
+  macvtap_cni.featureGated = true;
 
 MERGE (linux_bridge_cni:RHACMComponent {id: 'LINUX_BRIDGE_CNI'})
 ON CREATE SET 
@@ -130,7 +139,8 @@ ON CREATE SET
   kubesecondarydns.label = 'KubeSecondaryDNS',
   kubesecondarydns.subsystem = 'Cluster',
   kubesecondarydns.type = 'Component',
-  kubesecondarydns.description = 'DNS service for VM secondary network interfaces';
+  kubesecondarydns.description = 'DNS service for VM secondary network interfaces',
+  kubesecondarydns.featureGated = true;
 
 // --- Other CNV Components ---
 MERGE (hostpath_provisioner:RHACMComponent {id: 'HOSTPATH_PROVISIONER_OPERATOR'})
@@ -145,7 +155,9 @@ ON CREATE SET
   node_maintenance.label = 'Node Maintenance Operator',
   node_maintenance.subsystem = 'Cluster',
   node_maintenance.type = 'Operator',
-  node_maintenance.description = 'Manages node maintenance operations for VM workloads';
+  node_maintenance.description = 'Manages node maintenance operations for VM workloads',
+  node_maintenance.deprecated = true,
+  node_maintenance.deprecatedSince = 'CNV 4.18';
 
 MERGE (containerdisks:RHACMComponent {id: 'CONTAINERDISKS'})
 ON CREATE SET 
@@ -276,13 +288,14 @@ ON CREATE SET
   forklift_console.type = 'Component',
   forklift_console.description = 'OpenShift Console plugin for MTV migration UI';
 
-// --- Migration Planner ---
+// --- Migration Planner (standalone Red Hat service, not part of MTV operator deployment) ---
 MERGE (migration_planner:RHACMComponent {id: 'MIGRATION_PLANNER'})
 ON CREATE SET 
   migration_planner.label = 'Migration Planner',
   migration_planner.subsystem = 'Cluster',
   migration_planner.type = 'Component',
-  migration_planner.description = 'VMware assessment service for migration readiness';
+  migration_planner.description = 'Standalone VMware assessment SaaS for migration readiness (external to MTV)',
+  migration_planner.external = true;
 
 // ============================================================================
 // SECTION 3: CCLM (Cross-Cluster Live Migration)
@@ -318,7 +331,7 @@ MERGE (mtv_integrations:RHACMComponent {id: 'MTV_INTEGRATIONS'})
 ON CREATE SET 
   mtv_integrations.label = 'MTV Integrations',
   mtv_integrations.subsystem = 'Cluster',
-  mtv_integrations.type = 'Operator',
+  mtv_integrations.type = 'Controller',
   mtv_integrations.description = 'ACM MTV integration controller, webhooks, and addon management';
 
 MERGE (provider_manager_controller:RHACMComponent {id: 'PROVIDER_MANAGER_CONTROLLER'})
@@ -412,6 +425,11 @@ ON CREATE SET
   cluster_permission.label = 'ClusterPermission CRD',
   cluster_permission.subsystem = 'Cluster',
   cluster_permission.type = 'CRD',
+  cluster_permission.description = 'API for creating role/clusterrole bindings on managed clusters'
+ON MATCH SET
+  cluster_permission.label = 'ClusterPermission CRD',
+  cluster_permission.subsystem = 'Cluster',
+  cluster_permission.type = 'CRD',
   cluster_permission.description = 'API for creating role/clusterrole bindings on managed clusters';
 
 // --- Fine-Grained RBAC Search Integration ---
@@ -429,21 +447,6 @@ ON CREATE SET
   kubevirt_roles.subsystem = 'Cluster',
   kubevirt_roles.type = 'Component',
   kubevirt_roles.description = 'Standard ClusterRoles: kubevirt.io:admin, kubevirt.io:edit, kubevirt.io:view';
-
-// --- ACM Managed Roles ---
-MERGE (acm_hub_roles:RHACMComponent {id: 'ACM_HUB_KUBEVIRT_ROLES'})
-ON CREATE SET 
-  acm_hub_roles.label = 'ACM Hub KubeVirt Roles',
-  acm_hub_roles.subsystem = 'Cluster',
-  acm_hub_roles.type = 'Component',
-  acm_hub_roles.description = 'ACM-specific hub roles: kubevirt.io-acm-hub:admin/edit/view';
-
-MERGE (acm_managed_roles:RHACMComponent {id: 'ACM_MANAGED_KUBEVIRT_ROLES'})
-ON CREATE SET 
-  acm_managed_roles.label = 'ACM Managed KubeVirt Roles',
-  acm_managed_roles.subsystem = 'Cluster',
-  acm_managed_roles.type = 'Component',
-  acm_managed_roles.description = 'ACM-specific managed cluster roles: kubevirt.io-acm-managed:admin/edit/view';
 
 // --- RBAC UI Components ---
 MERGE (rbac_ui:RHACMComponent {id: 'RBAC_UI'})
@@ -470,7 +473,8 @@ ON CREATE SET
   kubevirt_tekton.label = 'KubeVirt Tekton Tasks',
   kubevirt_tekton.subsystem = 'Cluster',
   kubevirt_tekton.type = 'Component',
-  kubevirt_tekton.description = 'VM-specific tasks for Tekton Pipelines (create VM, disk operations)';
+  kubevirt_tekton.description = 'VM-specific tasks for Tekton Pipelines (create VM, disk operations)',
+  kubevirt_tekton.featureGated = true;
 
 // --- Backup Integration ---
 MERGE (kubevirt_velero:RHACMComponent {id: 'KUBEVIRT_VELERO_PLUGIN'})
@@ -513,9 +517,7 @@ MATCH (hco:RHACMComponent {id: 'HCO_OPERATOR'})
 MATCH (hostpath:RHACMComponent {id: 'HOSTPATH_PROVISIONER_OPERATOR'})
 MERGE (hco)-[:MANAGES]->(hostpath);
 
-MATCH (hco:RHACMComponent {id: 'HCO_OPERATOR'})
-MATCH (nodemaint:RHACMComponent {id: 'NODE_MAINTENANCE_OPERATOR'})
-MERGE (hco)-[:MANAGES]->(nodemaint);
+// NMO removed from HCO management in CNV 4.18+; node retained as deprecated for historical reference
 
 // --- SSP deploys templates ---
 MATCH (ssp:RHACMComponent {id: 'SSP_OPERATOR'})
@@ -701,22 +703,15 @@ MATCH (mcra:RHACMComponent {id: 'MCRA_OPERATOR'})
 MATCH (kv_roles:RHACMComponent {id: 'KUBEVIRT_STANDARD_ROLES'})
 MERGE (mcra)-[:USES]->(kv_roles);
 
-MATCH (mcra:RHACMComponent {id: 'MCRA_OPERATOR'})
-MATCH (hub_roles:RHACMComponent {id: 'ACM_HUB_KUBEVIRT_ROLES'})
-MERGE (mcra)-[:USES]->(hub_roles);
-
-MATCH (mcra:RHACMComponent {id: 'MCRA_OPERATOR'})
-MATCH (managed_roles:RHACMComponent {id: 'ACM_MANAGED_KUBEVIRT_ROLES'})
-MERGE (mcra)-[:USES]->(managed_roles);
-
 // --- Console plugin relationships ---
 MATCH (console:RHACMComponent {label: 'Web Console'})
 MATCH (kv_plugin:RHACMComponent {id: 'KUBEVIRT_PLUGIN'})
 MERGE (console)-[:USES]->(kv_plugin);
 
-MATCH (console:RHACMComponent {label: 'Web Console'})
+// Forklift Console Plugin is an OCP console plugin (not ACM console), part of MTV stack
 MATCH (forklift_console:RHACMComponent {id: 'FORKLIFT_CONSOLE_PLUGIN'})
-MERGE (console)-[:USES]->(forklift_console);
+MATCH (mtv:RHACMComponent {id: 'MTV_OPERATOR'})
+MERGE (forklift_console)-[:INTEGRATES_WITH]->(mtv);
 
 // --- API relationships (added 2026-02-02) ---
 // KubeVirt Operator provides KubeVirt API (VM, VMI, DataVolume CRDs)
@@ -730,10 +725,10 @@ MATCH (api:RHACMComponent {id: 'FORKLIFT_API'})
 MERGE (forklift)-[:PROVIDES_API]->(api);
 
 // --- ContainerDisks relationship ---
-// CDI Operator provides container disk images
-MATCH (cdi:RHACMComponent {id: 'CDI_OPERATOR'})
+// KubeVirt uses ContainerDisks as bootable OCI disk images (bypasses CDI/PVC)
+MATCH (kubevirt:RHACMComponent {id: 'KUBEVIRT_OPERATOR'})
 MATCH (disks:RHACMComponent {id: 'CONTAINERDISKS'})
-MERGE (cdi)-[:PROVIDES]->(disks);
+MERGE (kubevirt)-[:USES]->(disks);
 
 // --- Provider Server relationships ---
 // Provider Controller uses OVA Provider Server for OVA file imports
@@ -746,11 +741,7 @@ MATCH (provider:RHACMComponent {id: 'MTV_PROVIDER_CONTROLLER'})
 MATCH (hyperv:RHACMComponent {id: 'HYPERV_PROVIDER_SERVER'})
 MERGE (provider)-[:USES]->(hyperv);
 
-// --- Migration Planner integration ---
-// MTV Integrations integrates with Migration Planner for VMware assessment
-MATCH (mtv_int:RHACMComponent {id: 'MTV_INTEGRATIONS'})
-MATCH (planner:RHACMComponent {id: 'MIGRATION_PLANNER'})
-MERGE (mtv_int)-[:INTEGRATES_WITH]->(planner);
+// Migration Planner is a standalone Red Hat SaaS, not directly integrated with MTV Integrations controller
 
 // --- Tekton Tasks relationships ---
 // SSP Operator deploys KubeVirt Tekton Tasks

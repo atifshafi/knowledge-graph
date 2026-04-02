@@ -20,7 +20,7 @@ done
 
 | File | Components | Relationships | Description |
 |------|------------|---------------|-------------|
-| `rhacm-virtualization.cypher` | 48 | 60 | OpenShift Virtualization, MTV, CCLM, Fine-Grained RBAC |
+| `rhacm-virtualization.cypher` | 46 | 56 | OpenShift Virtualization, MTV, CCLM, Fine-Grained RBAC (audited 2026-04-02) |
 
 ## Extension Guidelines
 
@@ -34,6 +34,20 @@ SET n.label = 'My Component', n.subsystem = 'Virtualization';
 
 // BAD - Creates duplicates if run twice
 CREATE (:RHACMComponent {id: 'MY_COMPONENT', label: 'My Component'});
+```
+
+### Handle Base Graph ID Collisions
+If your extension MERGE matches a node already in the base graph, `ON CREATE SET` alone will NOT update the properties. Use `ON MATCH SET` to override:
+
+```cypher
+// GOOD - Updates properties even if node already exists in base graph
+MERGE (n:RHACMComponent {id: 'EXISTING_BASE_NODE'})
+ON CREATE SET n.label = 'My Label', n.subsystem = 'Cluster', n.type = 'CRD'
+ON MATCH SET n.label = 'My Label', n.subsystem = 'Cluster', n.type = 'CRD';
+
+// BAD - Properties silently ignored if node already exists
+MERGE (n:RHACMComponent {id: 'EXISTING_BASE_NODE'})
+ON CREATE SET n.label = 'My Label', n.subsystem = 'Cluster', n.type = 'CRD';
 ```
 
 ### Reference Base Graph Nodes
@@ -86,7 +100,7 @@ The `rhacm-virtualization.cypher` extension covers:
 - Fleet Virtualization Tree View
 - VM Actions and management
 
-**Verification**: All components verified against ACM 2.x with CNV 4.20+ and MTV 2.10+
+**Verification**: Audited 2026-04-02 against ACM 2.16 GA (CNV 4.21.1, MTV 2.11.2). See cypher file header for full audit details.
 
 ## Contributing
 
