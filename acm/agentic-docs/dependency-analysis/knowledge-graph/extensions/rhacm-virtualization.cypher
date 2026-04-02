@@ -3,8 +3,8 @@
 // ============================================================================
 // Generated: 2026-01-30
 // Source: Deep investigation of kubevirt, kubev2v, stolostron repos and JIRA
-// Components: 57 components across 6 feature areas (46 virt/RBAC + 11 Hive)
-// Relationships: 76 relationships (56 virt/RBAC + 20 Hive)
+// Components: 65 components across 7 feature areas (46 virt/RBAC + 11 Hive + 8 Klusterlet)
+// Relationships: 90 relationships (56 virt/RBAC + 20 Hive + 14 Klusterlet)
 // ============================================================================
 //
 // VERIFICATION STATUS: VERIFIED (Accuracy Audit 2026-04-02)
@@ -965,6 +965,152 @@ MERGE (cd)-[:CREATES]->(dnsz);
 MATCH (cpe:RHACMComponent {id: 'CLUSTER_PROVISIONING_ENGINE'})
 MATCH (cd:RHACMComponent {id: 'CLUSTER_DEPLOYMENT_CRD'})
 MERGE (cpe)-[:USES]->(cd);
+
+// ============================================================================
+// SECTION 9: KLUSTERLET / SPOKE AGENT SUBSYSTEM
+// ============================================================================
+// Added: 2026-04-02 (Knowledge Graph Expansion - Rank 2)
+// Verified: ACM 2.16 GA cluster + stolostron/console release-2.16
+// Cluster: open-cluster-management-agent (4 pods), open-cluster-management-hub
+//   (14 pods), open-cluster-management-agent-addon (9 addon agents)
+// CRDs: klusterlets, klusterletconfigs, klusterletaddonconfigs,
+//   appliedmanifestworks, manifestworkreplicasets
+// Source code: klusterlet (20 files), KlusterletAddonConfig (resource file),
+//   ManagedClusterCondition (20 files)
+// Backend-only (verified on cluster, no console UI code):
+//   registration-controller, work-webhook, addon-manager-controller, addon-webhook
+// Components: 8 new | Relationships: 14 new
+// ============================================================================
+
+// --- Klusterlet Agent (combined registration+work agent on spoke) ---
+MERGE (klusterlet_agent:RHACMComponent {id: 'KLUSTERLET_AGENT'})
+ON CREATE SET
+  klusterlet_agent.label = 'Klusterlet Agent',
+  klusterlet_agent.subsystem = 'Cluster',
+  klusterlet_agent.type = 'Component',
+  klusterlet_agent.description = 'Combined registration and work agent running on managed clusters (3 replicas), handles cluster registration and ManifestWork application';
+
+// --- Registration Controller (hub-side) ---
+MERGE (registration_controller:RHACMComponent {id: 'REGISTRATION_CONTROLLER'})
+ON CREATE SET
+  registration_controller.label = 'Registration Controller',
+  registration_controller.subsystem = 'Cluster',
+  registration_controller.type = 'Controller',
+  registration_controller.description = 'Hub-side controller managing managed cluster registration, CSR approval, and lease renewal';
+
+// --- Work Webhook (hub-side) ---
+MERGE (work_webhook:RHACMComponent {id: 'WORK_WEBHOOK'})
+ON CREATE SET
+  work_webhook.label = 'Work Webhook',
+  work_webhook.subsystem = 'Cluster',
+  work_webhook.type = 'Component',
+  work_webhook.description = 'Hub-side validating webhook for ManifestWork resources';
+
+// --- Klusterlet CRD ---
+MERGE (klusterlet_crd:RHACMComponent {id: 'KLUSTERLET_CRD'})
+ON CREATE SET
+  klusterlet_crd.label = 'Klusterlet CRD',
+  klusterlet_crd.subsystem = 'Cluster',
+  klusterlet_crd.type = 'CRD',
+  klusterlet_crd.description = 'Operator CR defining Klusterlet deployment mode (Default/Hosted), namespace, and feature gates on managed clusters';
+
+// --- KlusterletAddonConfig CRD ---
+MERGE (klusterlet_addon_config:RHACMComponent {id: 'KLUSTERLET_ADDON_CONFIG_CRD'})
+ON CREATE SET
+  klusterlet_addon_config.label = 'KlusterletAddonConfig CRD',
+  klusterlet_addon_config.subsystem = 'Cluster',
+  klusterlet_addon_config.type = 'CRD',
+  klusterlet_addon_config.description = 'Per-cluster addon deployment configuration controlling which addons are enabled (search, policy, proxy, IAM)';
+
+// --- AppliedManifestWork CRD ---
+MERGE (applied_manifestwork:RHACMComponent {id: 'APPLIED_MANIFESTWORK_CRD'})
+ON CREATE SET
+  applied_manifestwork.label = 'AppliedManifestWork CRD',
+  applied_manifestwork.subsystem = 'Cluster',
+  applied_manifestwork.type = 'CRD',
+  applied_manifestwork.description = 'Spoke-side record of ManifestWork resources applied by the work agent, tracking applied resources and status';
+
+// --- Addon Manager Controller (hub-side) ---
+MERGE (addon_manager_ctrl:RHACMComponent {id: 'ADDON_MANAGER_CONTROLLER'})
+ON CREATE SET
+  addon_manager_ctrl.label = 'Addon Manager Controller',
+  addon_manager_ctrl.subsystem = 'Cluster',
+  addon_manager_ctrl.type = 'Controller',
+  addon_manager_ctrl.description = 'Hub-side controller deploying and managing addon agents on managed clusters via ManagedClusterAddon CRs';
+
+// --- Addon Webhook (hub-side) ---
+MERGE (addon_webhook:RHACMComponent {id: 'ADDON_WEBHOOK'})
+ON CREATE SET
+  addon_webhook.label = 'Addon Webhook',
+  addon_webhook.subsystem = 'Cluster',
+  addon_webhook.type = 'Component',
+  addon_webhook.description = 'Hub-side validating webhook for ManagedClusterAddon and ClusterManagementAddon resources';
+
+// --- Klusterlet operator manages its agent and CRD ---
+MATCH (klusterlet:RHACMComponent {id: 'KLUSTERLET'})
+MATCH (kl_agent:RHACMComponent {id: 'KLUSTERLET_AGENT'})
+MERGE (klusterlet)-[:MANAGES]->(kl_agent);
+
+MATCH (klusterlet:RHACMComponent {id: 'KLUSTERLET'})
+MATCH (kl_crd:RHACMComponent {id: 'KLUSTERLET_CRD'})
+MERGE (klusterlet)-[:MANAGES]->(kl_crd);
+
+// --- Klusterlet Agent connects to hub registration and work services ---
+MATCH (kl_agent:RHACMComponent {id: 'KLUSTERLET_AGENT'})
+MATCH (reg:RHACMComponent {id: 'REGISTRATION'})
+MERGE (kl_agent)-[:USES]->(reg);
+
+MATCH (kl_agent:RHACMComponent {id: 'KLUSTERLET_AGENT'})
+MATCH (work:RHACMComponent {id: 'WORK'})
+MERGE (kl_agent)-[:USES]->(work);
+
+MATCH (kl_agent:RHACMComponent {id: 'KLUSTERLET_AGENT'})
+MATCH (reg_wh:RHACMComponent {id: 'REGISTRATION_WEBHOOK'})
+MERGE (kl_agent)-[:USES]->(reg_wh);
+
+// --- Klusterlet Agent creates AppliedManifestWork on spoke ---
+MATCH (kl_agent:RHACMComponent {id: 'KLUSTERLET_AGENT'})
+MATCH (amw:RHACMComponent {id: 'APPLIED_MANIFESTWORK_CRD'})
+MERGE (kl_agent)-[:CREATES]->(amw);
+
+// --- Registration Operator manages hub-side Registration Controller ---
+MATCH (reg_op:RHACMComponent {id: 'REGISTRATION_OPERATOR'})
+MATCH (reg_ctrl:RHACMComponent {id: 'REGISTRATION_CONTROLLER'})
+MERGE (reg_op)-[:MANAGES]->(reg_ctrl);
+
+// --- Registration Controller provides hub-side registration service ---
+MATCH (reg_ctrl:RHACMComponent {id: 'REGISTRATION_CONTROLLER'})
+MATCH (reg:RHACMComponent {id: 'REGISTRATION'})
+MERGE (reg_ctrl)-[:MANAGES]->(reg);
+
+// --- Work Management includes Work Webhook ---
+MATCH (work:RHACMComponent {id: 'WORK'})
+MATCH (work_wh:RHACMComponent {id: 'WORK_WEBHOOK'})
+MERGE (work)-[:CONTAINS]->(work_wh);
+
+// --- ManifestWork creates AppliedManifestWork on spoke ---
+MATCH (mw:RHACMComponent {id: 'MANIFESTWORK'})
+MATCH (amw:RHACMComponent {id: 'APPLIED_MANIFESTWORK_CRD'})
+MERGE (mw)-[:CREATES]->(amw);
+
+// --- Addon Framework manages hub controllers ---
+MATCH (addon:RHACMComponent {id: 'ADDON'})
+MATCH (addon_ctrl:RHACMComponent {id: 'ADDON_MANAGER_CONTROLLER'})
+MERGE (addon)-[:MANAGES]->(addon_ctrl);
+
+MATCH (addon:RHACMComponent {id: 'ADDON'})
+MATCH (addon_wh:RHACMComponent {id: 'ADDON_WEBHOOK'})
+MERGE (addon)-[:CONTAINS]->(addon_wh);
+
+// --- Klusterlet Addon Controller uses KlusterletAddonConfig CRD ---
+MATCH (kl_addon_ctrl:RHACMComponent {id: 'KLUSTERLET_ADDON_CTRL'})
+MATCH (kl_addon_cfg:RHACMComponent {id: 'KLUSTERLET_ADDON_CONFIG_CRD'})
+MERGE (kl_addon_ctrl)-[:MANAGES]->(kl_addon_cfg);
+
+// --- Addon Manager Controller uses KlusterletAddonConfig to deploy addons ---
+MATCH (addon_ctrl:RHACMComponent {id: 'ADDON_MANAGER_CONTROLLER'})
+MATCH (kl_addon_cfg:RHACMComponent {id: 'KLUSTERLET_ADDON_CONFIG_CRD'})
+MERGE (addon_ctrl)-[:USES]->(kl_addon_cfg);
 
 // ============================================================================
 // END OF SCRIPT
