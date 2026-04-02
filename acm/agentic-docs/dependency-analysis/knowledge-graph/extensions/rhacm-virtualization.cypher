@@ -3,8 +3,8 @@
 // ============================================================================
 // Generated: 2026-01-30
 // Source: Deep investigation of kubevirt, kubev2v, stolostron repos and JIRA
-// Components: 46 components across 5 feature areas (48 original - 2 fabricated roles removed)
-// Relationships: 56 relationships (60 original - 5 removed + 1 corrected)
+// Components: 57 components across 6 feature areas (46 virt/RBAC + 11 Hive)
+// Relationships: 76 relationships (56 virt/RBAC + 20 Hive)
 // ============================================================================
 //
 // VERIFICATION STATUS: VERIFIED (Accuracy Audit 2026-04-02)
@@ -775,6 +775,196 @@ MERGE (capi)-[:CONTAINS]->(capi_kv);
 MATCH (capi_kv:RHACMComponent {id: 'CLUSTER_API_PROVIDER_KUBEVIRT'})
 MATCH (kubevirt:RHACMComponent {id: 'KUBEVIRT_OPERATOR'})
 MERGE (capi_kv)-[:USES]->(kubevirt);
+
+// ============================================================================
+// SECTION 8: HIVE / CLUSTER PROVISIONING SUBSYSTEM
+// ============================================================================
+// Added: 2026-04-02 (Knowledge Graph Expansion - Rank 1)
+// Verified: ACM 2.16 GA cluster (CNV 4.21.1) + stolostron/console release-2.16
+// Verification: oc get crd (26 Hive CRDs), oc get pods -n hive (5 pods),
+//   7 validating webhooks, ACM Console source code (20+ files per CRD)
+// Components: 11 new | Relationships: 20 new
+// ============================================================================
+
+// --- Hive Controllers (main reconciliation engine) ---
+MERGE (hive_controllers:RHACMComponent {id: 'HIVE_CONTROLLERS'})
+ON CREATE SET
+  hive_controllers.label = 'Hive Controllers',
+  hive_controllers.subsystem = 'Cluster',
+  hive_controllers.type = 'Controller',
+  hive_controllers.description = 'Main Hive reconciliation engine managing ClusterDeployment, MachinePool, DNSZone, and ClusterDeprovision lifecycle';
+
+// --- Hive Admission (webhook validation) ---
+MERGE (hiveadmission:RHACMComponent {id: 'HIVEADMISSION'})
+ON CREATE SET
+  hiveadmission.label = 'Hive Admission Controller',
+  hiveadmission.subsystem = 'Cluster',
+  hiveadmission.type = 'Component',
+  hiveadmission.description = 'Validating admission webhooks for Hive CRDs (ClusterDeployment, ClusterImageSet, MachinePool, SyncSet, DNSZone)';
+
+// --- Hive ClusterSync (SyncSet delivery) ---
+MERGE (hive_clustersync:RHACMComponent {id: 'HIVE_CLUSTERSYNC'})
+ON CREATE SET
+  hive_clustersync.label = 'Hive ClusterSync',
+  hive_clustersync.subsystem = 'Cluster',
+  hive_clustersync.type = 'Controller',
+  hive_clustersync.description = 'Syncs SyncSet and SelectorSyncSet resources to managed clusters via ClusterSync';
+
+// --- ClusterDeployment CRD ---
+MERGE (cluster_deployment:RHACMComponent {id: 'CLUSTER_DEPLOYMENT_CRD'})
+ON CREATE SET
+  cluster_deployment.label = 'ClusterDeployment CRD',
+  cluster_deployment.subsystem = 'Cluster',
+  cluster_deployment.type = 'CRD',
+  cluster_deployment.description = 'Core Hive API for cluster creation, representing a desired managed cluster with platform, networking, and install config';
+
+// --- ClusterImageSet CRD ---
+MERGE (cluster_imageset:RHACMComponent {id: 'CLUSTER_IMAGE_SET_CRD'})
+ON CREATE SET
+  cluster_imageset.label = 'ClusterImageSet CRD',
+  cluster_imageset.subsystem = 'Cluster',
+  cluster_imageset.type = 'CRD',
+  cluster_imageset.description = 'Available OCP release versions for cluster provisioning, referenced by ClusterDeployment';
+
+// --- MachinePool CRD ---
+MERGE (machine_pool:RHACMComponent {id: 'MACHINE_POOL_CRD'})
+ON CREATE SET
+  machine_pool.label = 'MachinePool CRD',
+  machine_pool.subsystem = 'Cluster',
+  machine_pool.type = 'CRD',
+  machine_pool.description = 'Worker node pool definition for Hive-provisioned clusters with scaling (min/max replicas, autoscaling)';
+
+// --- ClusterProvision CRD ---
+MERGE (cluster_provision:RHACMComponent {id: 'CLUSTER_PROVISION_CRD'})
+ON CREATE SET
+  cluster_provision.label = 'ClusterProvision CRD',
+  cluster_provision.subsystem = 'Cluster',
+  cluster_provision.type = 'CRD',
+  cluster_provision.description = 'Tracks individual provisioning attempts for a ClusterDeployment including install log and status';
+
+// --- SyncSet CRD ---
+MERGE (syncset:RHACMComponent {id: 'SYNCSET_CRD'})
+ON CREATE SET
+  syncset.label = 'SyncSet CRD',
+  syncset.subsystem = 'Cluster',
+  syncset.type = 'CRD',
+  syncset.description = 'Day-2 configuration delivery to specific Hive-provisioned clusters (resources, patches, secrets)';
+
+// --- SelectorSyncSet CRD ---
+MERGE (selector_syncset:RHACMComponent {id: 'SELECTOR_SYNCSET_CRD'})
+ON CREATE SET
+  selector_syncset.label = 'SelectorSyncSet CRD',
+  selector_syncset.subsystem = 'Cluster',
+  selector_syncset.type = 'CRD',
+  selector_syncset.description = 'Label-selector-based SyncSet applying day-2 config to all matching ClusterDeployments';
+
+// --- DNSZone CRD ---
+MERGE (dnszone:RHACMComponent {id: 'DNS_ZONE_CRD'})
+ON CREATE SET
+  dnszone.label = 'DNSZone CRD',
+  dnszone.subsystem = 'Cluster',
+  dnszone.type = 'CRD',
+  dnszone.description = 'Cloud DNS zone management for cluster domains (AWS Route53, Azure DNS, GCP Cloud DNS)';
+
+// --- ClusterDeprovision CRD ---
+MERGE (cluster_deprovision:RHACMComponent {id: 'CLUSTER_DEPROVISION_CRD'})
+ON CREATE SET
+  cluster_deprovision.label = 'ClusterDeprovision CRD',
+  cluster_deprovision.subsystem = 'Cluster',
+  cluster_deprovision.type = 'CRD',
+  cluster_deprovision.description = 'Tracks cloud resource cleanup when a ClusterDeployment is deleted';
+
+// --- Hive Operator manages its controllers ---
+MATCH (hive:RHACMComponent {id: 'HIVE'})
+MATCH (hive_ctrl:RHACMComponent {id: 'HIVE_CONTROLLERS'})
+MERGE (hive)-[:MANAGES]->(hive_ctrl);
+
+MATCH (hive:RHACMComponent {id: 'HIVE'})
+MATCH (hiveadm:RHACMComponent {id: 'HIVEADMISSION'})
+MERGE (hive)-[:MANAGES]->(hiveadm);
+
+MATCH (hive:RHACMComponent {id: 'HIVE'})
+MATCH (hive_cs:RHACMComponent {id: 'HIVE_CLUSTERSYNC'})
+MERGE (hive)-[:MANAGES]->(hive_cs);
+
+// --- Hive Controllers reconcile CRDs ---
+MATCH (hive_ctrl:RHACMComponent {id: 'HIVE_CONTROLLERS'})
+MATCH (cd:RHACMComponent {id: 'CLUSTER_DEPLOYMENT_CRD'})
+MERGE (hive_ctrl)-[:MANAGES]->(cd);
+
+MATCH (hive_ctrl:RHACMComponent {id: 'HIVE_CONTROLLERS'})
+MATCH (mp:RHACMComponent {id: 'MACHINE_POOL_CRD'})
+MERGE (hive_ctrl)-[:MANAGES]->(mp);
+
+MATCH (hive_ctrl:RHACMComponent {id: 'HIVE_CONTROLLERS'})
+MATCH (cp:RHACMComponent {id: 'CLUSTER_PROVISION_CRD'})
+MERGE (hive_ctrl)-[:MANAGES]->(cp);
+
+MATCH (hive_ctrl:RHACMComponent {id: 'HIVE_CONTROLLERS'})
+MATCH (dnsz:RHACMComponent {id: 'DNS_ZONE_CRD'})
+MERGE (hive_ctrl)-[:MANAGES]->(dnsz);
+
+MATCH (hive_ctrl:RHACMComponent {id: 'HIVE_CONTROLLERS'})
+MATCH (deprov:RHACMComponent {id: 'CLUSTER_DEPROVISION_CRD'})
+MERGE (hive_ctrl)-[:MANAGES]->(deprov);
+
+// --- Hive ClusterSync manages SyncSet delivery ---
+MATCH (hive_cs:RHACMComponent {id: 'HIVE_CLUSTERSYNC'})
+MATCH (ss:RHACMComponent {id: 'SYNCSET_CRD'})
+MERGE (hive_cs)-[:MANAGES]->(ss);
+
+MATCH (hive_cs:RHACMComponent {id: 'HIVE_CLUSTERSYNC'})
+MATCH (sss:RHACMComponent {id: 'SELECTOR_SYNCSET_CRD'})
+MERGE (hive_cs)-[:MANAGES]->(sss);
+
+// --- Hive Admission validates CRDs ---
+MATCH (hiveadm:RHACMComponent {id: 'HIVEADMISSION'})
+MATCH (cd:RHACMComponent {id: 'CLUSTER_DEPLOYMENT_CRD'})
+MERGE (hiveadm)-[:VALIDATES_VIA]->(cd);
+
+MATCH (hiveadm:RHACMComponent {id: 'HIVEADMISSION'})
+MATCH (cis:RHACMComponent {id: 'CLUSTER_IMAGE_SET_CRD'})
+MERGE (hiveadm)-[:VALIDATES_VIA]->(cis);
+
+// --- ClusterDeployment depends on ClusterImageSet for OCP release ---
+MATCH (cd:RHACMComponent {id: 'CLUSTER_DEPLOYMENT_CRD'})
+MATCH (cis:RHACMComponent {id: 'CLUSTER_IMAGE_SET_CRD'})
+MERGE (cd)-[:DEPENDS_ON]->(cis);
+
+// --- ClusterDeployment uses Cloud Provider Secrets ---
+MATCH (cd:RHACMComponent {id: 'CLUSTER_DEPLOYMENT_CRD'})
+MATCH (creds:RHACMComponent {label: 'Cloud Provider Secrets'})
+MERGE (cd)-[:USES]->(creds);
+
+// --- ClusterPools creates ClusterDeployments ---
+MATCH (pools:RHACMComponent {id: 'CLUSTER_POOLS'})
+MATCH (cd:RHACMComponent {id: 'CLUSTER_DEPLOYMENT_CRD'})
+MERGE (pools)-[:USES]->(cd);
+
+// --- ClusterImageSet controller syncs to ClusterImageSet CRD ---
+MATCH (cis_ctrl:RHACMComponent {id: 'CLUSTER_IMAGESET_CTRL'})
+MATCH (cis:RHACMComponent {id: 'CLUSTER_IMAGE_SET_CRD'})
+MERGE (cis_ctrl)-[:MANAGES]->(cis);
+
+// --- ClusterDeployment creates ClusterProvision attempts ---
+MATCH (cd:RHACMComponent {id: 'CLUSTER_DEPLOYMENT_CRD'})
+MATCH (cp:RHACMComponent {id: 'CLUSTER_PROVISION_CRD'})
+MERGE (cd)-[:CREATES]->(cp);
+
+// --- ClusterDeployment contains MachinePool for worker scaling ---
+MATCH (cd:RHACMComponent {id: 'CLUSTER_DEPLOYMENT_CRD'})
+MATCH (mp:RHACMComponent {id: 'MACHINE_POOL_CRD'})
+MERGE (cd)-[:CONTAINS]->(mp);
+
+// --- ClusterDeployment creates DNSZone for domain ---
+MATCH (cd:RHACMComponent {id: 'CLUSTER_DEPLOYMENT_CRD'})
+MATCH (dnsz:RHACMComponent {id: 'DNS_ZONE_CRD'})
+MERGE (cd)-[:CREATES]->(dnsz);
+
+// --- Cluster Provisioning Engine uses ClusterDeployment ---
+MATCH (cpe:RHACMComponent {id: 'CLUSTER_PROVISIONING_ENGINE'})
+MATCH (cd:RHACMComponent {id: 'CLUSTER_DEPLOYMENT_CRD'})
+MERGE (cpe)-[:USES]->(cd);
 
 // ============================================================================
 // END OF SCRIPT
