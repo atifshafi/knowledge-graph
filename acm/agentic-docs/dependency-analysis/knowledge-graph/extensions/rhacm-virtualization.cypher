@@ -1255,5 +1255,59 @@ MATCH (hcp:RHACMComponent {id: 'HOSTED_CONTROL_PLANE_CRD'})
 MERGE (hc)-[:CONTAINS]->(hcp);
 
 // ============================================================================
+// SECTION 12: TIER 1 DEPTH - SPOKE ADDON TO KLUSTERLET DEPENDENCIES
+// ============================================================================
+// Added: 2026-04-03 (Depth Improvement - Tier 1)
+// Purpose: Connect spoke-side addon pods to Klusterlet Agent dependency.
+//   All addons deployed to managed clusters run in open-cluster-management-agent-addon
+//   namespace and depend on the Klusterlet Agent for deployment and lifecycle.
+// Verified: ACM 2.16 GA cluster (local-cluster spoke addons)
+//   Pods: application-manager, cert-policy-controller, cluster-proxy-proxy-agent,
+//     config-policy-controller, governance-policy-framework, klusterlet-addon-search,
+//     klusterlet-addon-workmgr, managed-serviceaccount-addon-agent
+//   ManagedClusterAddons: 12 addons all Available=True
+//   Source code: search-collector (20 files), application-manager (20 files),
+//     work-manager (20 files), cluster-proxy (20 files)
+// Components: 0 new | Relationships: 7 new (all DEPENDS_ON existing nodes)
+// ============================================================================
+
+// --- Spoke addon pods depend on Klusterlet Agent for deployment ---
+
+// search-collector runs as klusterlet-addon-search on spoke
+MATCH (sc:RHACMComponent {id: 'SEARCH_COLLECTOR'})
+MATCH (kla:RHACMComponent {id: 'KLUSTERLET_AGENT'})
+MERGE (sc)-[:DEPENDS_ON]->(kla);
+
+// governance-policy-framework-addon runs on spoke via klusterlet
+MATCH (gpfa:RHACMComponent {id: 'GOV_POLICY_FRAMEWORK_ADDON'})
+MATCH (kla:RHACMComponent {id: 'KLUSTERLET_AGENT'})
+MERGE (gpfa)-[:DEPENDS_ON]->(kla);
+
+// config-policy-controller deployed as spoke addon
+MATCH (cpc:RHACMComponent {id: 'CONFIG_POLICY_CTRL'})
+MATCH (kla:RHACMComponent {id: 'KLUSTERLET_AGENT'})
+MERGE (cpc)-[:DEPENDS_ON]->(kla);
+
+// cert-policy-controller deployed as spoke addon
+MATCH (certpc:RHACMComponent {id: 'CERT_POLICY_CTRL'})
+MATCH (kla:RHACMComponent {id: 'KLUSTERLET_AGENT'})
+MERGE (certpc)-[:DEPENDS_ON]->(kla);
+
+// application-manager deployed as spoke addon
+MATCH (am:RHACMComponent {id: 'APPLICATION_MANAGER'})
+MATCH (kla:RHACMComponent {id: 'KLUSTERLET_AGENT'})
+MERGE (am)-[:DEPENDS_ON]->(kla);
+
+// managed-serviceaccount deployed as spoke addon
+MATCH (msa:RHACMComponent {id: 'MANAGED_SERVICEACCOUNT'})
+MATCH (kla:RHACMComponent {id: 'KLUSTERLET_AGENT'})
+MERGE (msa)-[:DEPENDS_ON]->(kla);
+
+// cluster-proxy runs as cluster-proxy-proxy-agent on spoke
+MATCH (cp:RHACMComponent {id: 'CLUSTER_PROXY'})
+MATCH (kla:RHACMComponent {id: 'KLUSTERLET_AGENT'})
+MERGE (cp)-[:DEPENDS_ON]->(kla);
+
+// ============================================================================
 // END OF SCRIPT
 // ============================================================================
