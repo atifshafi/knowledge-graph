@@ -1309,5 +1309,68 @@ MATCH (kla:RHACMComponent {id: 'KLUSTERLET_AGENT'})
 MERGE (cp)-[:DEPENDS_ON]->(kla);
 
 // ============================================================================
+// SECTION 13: TIER 2 DEPTH - CRD RECONCILIATION & CROSS-COMPONENT CONNECTIONS
+// ============================================================================
+// Added: 2026-04-03 (Depth Improvement - Tier 2)
+// Purpose: Connect controllers to the CRDs/components they reconcile, and add
+//   cross-component data flows within subsystems. Only verified relationships.
+// Verification:
+//   1. PolicyAutomationReconciler->AnsibleJob: source (40 files), cluster (both CRDs)
+//   2-4. ClusterManager->Registration/Placement/Addon: cluster pod naming
+//        (cluster-manager-registration-controller, cluster-manager-placement-controller,
+//         cluster-manager-addon-manager-controller pods in open-cluster-management-hub)
+//   5. AddonDeploymentController->ObservabilityAddon: source (15 files),
+//        cluster (endpoint-observability-operator pod)
+//   6. StoreGateway->MetricsStorage: cluster (thanos-store pods), Thanos architecture
+//   7-8. SpecSync/StatusSync->PolicyPropagator: cluster (governance-policy-framework
+//        pod + grc-policy-propagator pod confirmed running)
+// Skipped (could not verify):
+//   - GatekeeperSyncCtrl->Gatekeeper: gatekeeper NOT installed on cluster
+//   - Search internal connections: would duplicate operator-level relationships
+//   - Governance reconcilers->CRDs: target CRDs (Policy, ConfigurationPolicy) not in graph
+// Components: 0 new | Relationships: 8 new
+// ============================================================================
+
+// --- Governance: PolicyAutomation creates AnsibleJob on violations ---
+MATCH (par:RHACMComponent {id: 'POLICY_AUTOMATION_RECONCILER'})
+MATCH (aj:RHACMComponent {id: 'ANSIBLE_JOB_CRD'})
+MERGE (par)-[:USES]->(aj);
+
+// --- Governance: Spec Sync syncs policy specs from hub propagator to spoke ---
+MATCH (ss:RHACMComponent {id: 'SPEC_SYNC_CTRL'})
+MATCH (gpp:RHACMComponent {id: 'GOV_POLICY_PROP'})
+MERGE (ss)-[:USES]->(gpp);
+
+// --- Governance: Status Sync sends compliance status from spoke to hub propagator ---
+MATCH (sts:RHACMComponent {id: 'STATUS_SYNC_CTRL'})
+MATCH (gpp:RHACMComponent {id: 'GOV_POLICY_PROP'})
+MERGE (sts)-[:USES]->(gpp);
+
+// --- Observability: Addon Deployment Controller deploys Observability Addon to spokes ---
+MATCH (adc:RHACMComponent {id: 'ADDON_DEPLOYMENT_CONTROLLER'})
+MATCH (oa:RHACMComponent {id: 'OBSERVABILITY_ADDON'})
+MERGE (adc)-[:DEPLOYS]->(oa);
+
+// --- Observability: Store Gateway reads from Metrics Storage (Thanos long-term) ---
+MATCH (sg:RHACMComponent {id: 'STORE_GATEWAY'})
+MATCH (ms:RHACMComponent {id: 'METRICS_STORAGE'})
+MERGE (sg)-[:USES]->(ms);
+
+// --- Overview: Cluster Manager deploys Registration Controller on hub ---
+MATCH (cm:RHACMComponent {id: 'CLUSTER_MANAGER'})
+MATCH (rc:RHACMComponent {id: 'REGISTRATION_CONTROLLER'})
+MERGE (cm)-[:MANAGES]->(rc);
+
+// --- Overview: Cluster Manager deploys Placement Controller on hub ---
+MATCH (cm:RHACMComponent {id: 'CLUSTER_MANAGER'})
+MATCH (pl:RHACMComponent {id: 'PLACEMENT'})
+MERGE (cm)-[:MANAGES]->(pl);
+
+// --- Overview: Cluster Manager deploys Addon Manager Controller on hub ---
+MATCH (cm:RHACMComponent {id: 'CLUSTER_MANAGER'})
+MATCH (amc:RHACMComponent {id: 'ADDON_MANAGER_CONTROLLER'})
+MERGE (cm)-[:MANAGES]->(amc);
+
+// ============================================================================
 // END OF SCRIPT
 // ============================================================================
