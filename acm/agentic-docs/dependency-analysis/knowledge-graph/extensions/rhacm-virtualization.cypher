@@ -3,8 +3,8 @@
 // ============================================================================
 // Generated: 2026-01-30
 // Source: Deep investigation of kubevirt, kubev2v, stolostron repos and JIRA
-// Components: 65 components across 7 feature areas (46 virt/RBAC + 11 Hive + 8 Klusterlet)
-// Relationships: 90 relationships (56 virt/RBAC + 20 Hive + 14 Klusterlet)
+// Components: 68 components across 8 feature areas (46 virt/RBAC + 11 Hive + 8 Klusterlet + 3 Addon)
+// Relationships: 96 relationships (56 virt/RBAC + 20 Hive + 14 Klusterlet + 6 Addon)
 // ============================================================================
 //
 // VERIFICATION STATUS: VERIFIED (Accuracy Audit 2026-04-02)
@@ -1111,6 +1111,76 @@ MERGE (kl_addon_ctrl)-[:MANAGES]->(kl_addon_cfg);
 MATCH (addon_ctrl:RHACMComponent {id: 'ADDON_MANAGER_CONTROLLER'})
 MATCH (kl_addon_cfg:RHACMComponent {id: 'KLUSTERLET_ADDON_CONFIG_CRD'})
 MERGE (addon_ctrl)-[:USES]->(kl_addon_cfg);
+
+// ============================================================================
+// SECTION 10: ADDON FRAMEWORK DEEP DIVE
+// ============================================================================
+// Added: 2026-04-03 (Knowledge Graph Expansion - Rank 3)
+// Verified: ACM 2.16 GA cluster + stolostron/console release-2.16
+// CRDs: clustermanagementaddons (17 instances), addontemplates (6 instances),
+//   addondeploymentconfigs (1 instance)
+// Source code: ClusterManagementAddOn (20 files, dedicated resource file),
+//   ManagedClusterAddOn (20 files, dedicated resource file + backend lib),
+//   AddOnTemplate (3 files), AddonDeploymentConfig (3 files)
+// Cluster verification: CMA spec.defaultConfigs verified to reference
+//   addontemplates (kubevirt-hyperconverged, managed-serviceaccount) and
+//   addondeploymentconfigs (search-collector, managed-serviceaccount)
+// Components: 3 new | Relationships: 6 new
+// ============================================================================
+
+// --- ClusterManagementAddOn CRD (global addon definition) ---
+MERGE (cma_crd:RHACMComponent {id: 'CLUSTER_MANAGEMENT_ADDON_CRD'})
+ON CREATE SET
+  cma_crd.label = 'ClusterManagementAddOn CRD',
+  cma_crd.subsystem = 'Cluster',
+  cma_crd.type = 'CRD',
+  cma_crd.description = 'Global addon definition specifying display name, install strategy (Manual/Placements), default configs, and template references';
+
+// --- AddOnTemplate CRD ---
+MERGE (addon_template:RHACMComponent {id: 'ADDON_TEMPLATE_CRD'})
+ON CREATE SET
+  addon_template.label = 'AddOnTemplate CRD',
+  addon_template.subsystem = 'Cluster',
+  addon_template.type = 'CRD',
+  addon_template.description = 'Template-based addon deployment mechanism defining agent manifests and registration config for spoke clusters';
+
+// --- AddonDeploymentConfig CRD ---
+MERGE (addon_deploy_cfg:RHACMComponent {id: 'ADDON_DEPLOYMENT_CONFIG_CRD'})
+ON CREATE SET
+  addon_deploy_cfg.label = 'AddonDeploymentConfig CRD',
+  addon_deploy_cfg.subsystem = 'Cluster',
+  addon_deploy_cfg.type = 'CRD',
+  addon_deploy_cfg.description = 'Addon deployment configuration for customizing nodeSelector, tolerations, proxy settings, and resource limits';
+
+// --- Connect existing Addon Framework concept to addon-framework component ---
+MATCH (addon:RHACMComponent {id: 'ADDON'})
+MATCH (addon_fw:RHACMComponent {id: 'ADDON_FRAMEWORK'})
+MERGE (addon)-[:CONTAINS]->(addon_fw);
+
+// --- addon-framework manages ClusterManagementAddOn CRD ---
+MATCH (addon_fw:RHACMComponent {id: 'ADDON_FRAMEWORK'})
+MATCH (cma:RHACMComponent {id: 'CLUSTER_MANAGEMENT_ADDON_CRD'})
+MERGE (addon_fw)-[:MANAGES]->(cma);
+
+// --- Addon Manager Controller reconciles ClusterManagementAddOn ---
+MATCH (addon_ctrl:RHACMComponent {id: 'ADDON_MANAGER_CONTROLLER'})
+MATCH (cma:RHACMComponent {id: 'CLUSTER_MANAGEMENT_ADDON_CRD'})
+MERGE (addon_ctrl)-[:MANAGES]->(cma);
+
+// --- ClusterManagementAddOn auto-creates ManagedClusterAddOn per-cluster ---
+MATCH (cma:RHACMComponent {id: 'CLUSTER_MANAGEMENT_ADDON_CRD'})
+MATCH (mca:RHACMComponent {id: 'MANAGEDCLUSTER_ADDON'})
+MERGE (cma)-[:CREATES]->(mca);
+
+// --- ClusterManagementAddOn references AddOnTemplate for deployment ---
+MATCH (cma:RHACMComponent {id: 'CLUSTER_MANAGEMENT_ADDON_CRD'})
+MATCH (tmpl:RHACMComponent {id: 'ADDON_TEMPLATE_CRD'})
+MERGE (cma)-[:USES]->(tmpl);
+
+// --- ClusterManagementAddOn references AddonDeploymentConfig ---
+MATCH (cma:RHACMComponent {id: 'CLUSTER_MANAGEMENT_ADDON_CRD'})
+MATCH (cfg:RHACMComponent {id: 'ADDON_DEPLOYMENT_CONFIG_CRD'})
+MERGE (cma)-[:USES]->(cfg);
 
 // ============================================================================
 // END OF SCRIPT
