@@ -3,8 +3,8 @@
 // ============================================================================
 // Generated: 2026-01-30
 // Source: Deep investigation of kubevirt, kubev2v, stolostron repos and JIRA
-// Components: 68 components across 8 feature areas (46 virt/RBAC + 11 Hive + 8 Klusterlet + 3 Addon)
-// Relationships: 96 relationships (56 virt/RBAC + 20 Hive + 14 Klusterlet + 6 Addon)
+// Components: 72 components across 9 feature areas (46 virt/RBAC + 11 Hive + 8 Klusterlet + 3 Addon + 4 HyperShift)
+// Relationships: 102 relationships (56 virt/RBAC + 20 Hive + 14 Klusterlet + 6 Addon + 6 HyperShift)
 // ============================================================================
 //
 // VERIFICATION STATUS: VERIFIED (Accuracy Audit 2026-04-02)
@@ -1181,6 +1181,78 @@ MERGE (cma)-[:USES]->(tmpl);
 MATCH (cma:RHACMComponent {id: 'CLUSTER_MANAGEMENT_ADDON_CRD'})
 MATCH (cfg:RHACMComponent {id: 'ADDON_DEPLOYMENT_CONFIG_CRD'})
 MERGE (cma)-[:USES]->(cfg);
+
+// ============================================================================
+// SECTION 11: HYPERSHIFT / HOSTED CONTROL PLANES
+// ============================================================================
+// Added: 2026-04-03 (Knowledge Graph Expansion - Rank 7)
+// Verified: ACM 2.16 GA cluster + stolostron/console release-2.16
+// Cluster: hypershift namespace (2 operator pods), 11 HyperShift CRDs
+//   (hostedclusters, nodepools, hostedcontrolplanes, controlplanecomponents, etc.)
+// Source code: HostedCluster (20 files, dedicated resource file),
+//   NodePool (20 files, dedicated resource file, form/table/progress/modal),
+//   HostedControlPlane (11 files), hypershift (20 files, wizard/template/status)
+// Components: 4 new | Relationships: 6 new
+// ============================================================================
+
+// --- HyperShift Operator (manages hosted clusters) ---
+MERGE (hypershift_op:RHACMComponent {id: 'HYPERSHIFT_OPERATOR'})
+ON CREATE SET
+  hypershift_op.label = 'HyperShift Operator',
+  hypershift_op.subsystem = 'Cluster',
+  hypershift_op.type = 'Operator',
+  hypershift_op.description = 'Manages HostedCluster, NodePool, and HostedControlPlane lifecycle for hosted control plane clusters';
+
+// --- HostedCluster CRD ---
+MERGE (hosted_cluster:RHACMComponent {id: 'HOSTED_CLUSTER_CRD'})
+ON CREATE SET
+  hosted_cluster.label = 'HostedCluster CRD',
+  hosted_cluster.subsystem = 'Cluster',
+  hosted_cluster.type = 'CRD',
+  hosted_cluster.description = 'Defines a hosted cluster with shared control plane, specifying platform (AWS, KubeVirt, Azure, Agent), release image, networking, and services';
+
+// --- NodePool CRD ---
+MERGE (node_pool:RHACMComponent {id: 'NODE_POOL_CRD'})
+ON CREATE SET
+  node_pool.label = 'NodePool CRD',
+  node_pool.subsystem = 'Cluster',
+  node_pool.type = 'CRD',
+  node_pool.description = 'Worker node pool for hosted clusters with scaling (replicas, autoscaling), platform-specific config, and release image';
+
+// --- HostedControlPlane CRD ---
+MERGE (hosted_cp:RHACMComponent {id: 'HOSTED_CONTROL_PLANE_CRD'})
+ON CREATE SET
+  hosted_cp.label = 'HostedControlPlane CRD',
+  hosted_cp.subsystem = 'Cluster',
+  hosted_cp.type = 'CRD',
+  hosted_cp.description = 'Internal representation of the hosted control plane components (API server, etcd, controllers) running on the management cluster';
+
+// --- HyperShift addon agent deploys the operator ---
+MATCH (hs_agent:RHACMComponent {id: 'HYPERSHIFT_ADDON_AGENT'})
+MATCH (hs_op:RHACMComponent {id: 'HYPERSHIFT_OPERATOR'})
+MERGE (hs_agent)-[:MANAGES]->(hs_op);
+
+// --- HyperShift Operator manages its CRDs ---
+MATCH (hs_op:RHACMComponent {id: 'HYPERSHIFT_OPERATOR'})
+MATCH (hc:RHACMComponent {id: 'HOSTED_CLUSTER_CRD'})
+MERGE (hs_op)-[:MANAGES]->(hc);
+
+MATCH (hs_op:RHACMComponent {id: 'HYPERSHIFT_OPERATOR'})
+MATCH (np:RHACMComponent {id: 'NODE_POOL_CRD'})
+MERGE (hs_op)-[:MANAGES]->(np);
+
+MATCH (hs_op:RHACMComponent {id: 'HYPERSHIFT_OPERATOR'})
+MATCH (hcp:RHACMComponent {id: 'HOSTED_CONTROL_PLANE_CRD'})
+MERGE (hs_op)-[:MANAGES]->(hcp);
+
+// --- HostedCluster contains NodePools and HostedControlPlane ---
+MATCH (hc:RHACMComponent {id: 'HOSTED_CLUSTER_CRD'})
+MATCH (np:RHACMComponent {id: 'NODE_POOL_CRD'})
+MERGE (hc)-[:CONTAINS]->(np);
+
+MATCH (hc:RHACMComponent {id: 'HOSTED_CLUSTER_CRD'})
+MATCH (hcp:RHACMComponent {id: 'HOSTED_CONTROL_PLANE_CRD'})
+MERGE (hc)-[:CONTAINS]->(hcp);
 
 // ============================================================================
 // END OF SCRIPT

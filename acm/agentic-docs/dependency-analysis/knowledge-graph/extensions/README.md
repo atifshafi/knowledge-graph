@@ -20,7 +20,7 @@ done
 
 | File | Components | Relationships | Description |
 |------|------------|---------------|-------------|
-| `rhacm-virtualization.cypher` | 68 | 96 | OpenShift Virtualization, MTV, CCLM, Fine-Grained RBAC, Hive, Klusterlet, Addon Framework (audited 2026-04-02) |
+| `rhacm-virtualization.cypher` | 72 | 102 | OpenShift Virtualization, MTV, CCLM, Fine-Grained RBAC, Hive, Klusterlet, Addon Framework, HyperShift (audited 2026-04-02) |
 
 ## Extension Guidelines
 
